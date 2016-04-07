@@ -1,0 +1,84 @@
+#source("L:/HIWIs/2h Daniel/EPL FSQCA/Code/Utilities.R")
+
+# library(jsonlite)
+# library(lubridate)
+# library(xlsx)
+# library(httr)
+
+
+
+Redditscrape<-function(jsonurl,limit=100,maxcount=1000){
+count=0
+q1<-c(sprintf("limit=%i",limit))
+
+#making the http call with httr
+rawreq<-GET(url=jsonurl,query=q1)
+rawjson<-content(rawreq,as="text") #storing the response content as text
+rlist<-fromJSON(rawjson,flatten = TRUE) # converting from JSON format to R list
+
+#data extraction to data frame with a custom function
+
+dtaconvert<-function(rdat=rlist){
+rr<-data.frame(
+  id=rdat$data$children$data.id,
+  kind=rdat$data$children$kind,
+  author=rdat$data$children$data.author,
+  title=rdat$data$children$data.title,
+  score=rdat$data$children$data.score,
+  ups=rdat$data$children$data.ups,
+  downs=rdat$data$children$data.downs,
+  num_comments=rdat$data$children$data.num_comments,
+  created=rdat$data$children$data.created,
+  created_utc=rdat$data$children$data.created_utc,
+  name=rdat$data$children$data.name,
+  url=rdat$data$children$data.url,
+  extracted=Sys.Date(),
+  selftext=rdat$data$children$data.selftext,
+  stringsAsFactors = FALSE)
+
+return(rr)
+}
+
+rr<-dtaconvert()
+count<-count+limit #increasing the count for the http query
+lastname<-rr[count,"name"] #storing the last name-id
+
+#main extraction loop
+      while(maxcount > count){
+        #autamitc query iteration to request the next "limit" elements
+        q2<-c(sprintf("limit=%i&count=%i&after=%s",limit,count,lastname))
+
+        #data extraction and conversion
+        rawreq<-GET(url=jsonurl,query=q2)
+        rawjson<-content(rawreq,as="text")
+        rlist<-fromJSON(rawjson,flatten = TRUE)
+        rr_step<-dtaconvert()
+
+        #merge data
+        rr<-rbind(rr,rr_step)
+        count<-count+limit
+        lastname<-rr[count,"name"]
+      }
+
+#convert the UTC timestamp to "normal" time
+rr$creationtime<-ymd_hms(as.POSIXct(rr$created_utc, origin="1970-01-01"))
+
+
+#test for uniqueness of the data
+plot(rr$creationtime)
+
+    if(anyDuplicated(rr$id) == 0 & anyDuplicated(rr$name) == 0){
+       print("No duplicates found")
+    }
+    else{
+      print("WARNING! Duplicates found!")
+    }
+
+return(rr)
+}
+
+#stuff for function testing and debugging.
+#myDebug(Redditscrape)
+#rr<-Redditscrape("https://www.reddit.com/r/depression/new.json",limit=100,maxcount = 1000)
+
+#rr[duplicated(rr$created_utc)==TRUE,"created_utc"]
