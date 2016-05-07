@@ -1,17 +1,17 @@
-#setwd("C:/Users/Daniel/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
+setwd("C:/Users/Daniel/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
 #source("C:/Users/Daniel/Mein Zeug/UNI/Arbeit/EPL FSQCA/Code/Utilities.R")
-setwd("C:/Users/Daniel/SkyDrive/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
+#setwd("C:/Users/Daniel/SkyDrive/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
 #setwd("L:/HIWIs/2h Daniel/BigData/Dta pure")
 
-library(tm)
-library(RWeka)
-library(plyr)
-library(dplyr)
-library(RCurl)
-library(ggplot2)
 library(stringr)
+library(tm)
+library(dplyr)
+library(plyr)
 
-rr_u<-readRDS("rr_u_260416.rds")
+positives= readLines("positive.words.txt")
+negatives = readLines("negative.words.txt")
+
+rr_u<-readRDS("rr_u_070515.rds")
 sa1prep<-as.data.frame(rr_u[,"selftext"])
 
 sa1<-VCorpus(DataframeSource(sa1prep))
@@ -20,7 +20,7 @@ lapply(sa1[1:2],meta)
 
 #assign unique identifier to the texts
 changemeta<-function(ss1,ss12){
-  
+
   for(i in seq(ss1)){
     meta(ss1[[i]],"id")<-ss12[i,"id"]
   }
@@ -36,7 +36,7 @@ sa1<-changemeta(sa1,rr_u)
 # Text prep ---------------------------------------------------------------
 #remove special characters
 
-#Stopwords to eliminate = 
+#Stopwords to eliminate =
 
 rm_specialchar <- function(dta) {
   for (j in seq(dta))
@@ -81,19 +81,28 @@ as.character(sa1[[1]])
 
 ss3<-dataframe<-data.frame(text=unlist(sapply(sa1, `[`, "content")), stringsAsFactors=F)
 rownames(ss3)<-gsub(".content","",rownames(ss3))
-#word_list<-str_split(ss3,pattern="\s+")
-#ss3$words<-apply(ss3,1,str_split,pattern="\\s+")
+
+saveRDS(ss3,"ss3.RDS")
 
 sscores<-function(dta,positive_words,negative_words){
-  dta
-  word_list=str_split(dta,"\s+")
+  word_list=str_split(dta,"\\s+")
   words=unlist(word_list)
   positive.matches<-match(words,positive_words)
   negative.matches<-match(words,negative_words)
-  
-  positive_matches<-!is.na(positive_matches)
-  negative_matches<-!is.na(negative_matches)
-  
+
+  positive_matches<-!is.na(positive.matches)
+  negative_matches<-!is.na(negative.matches)
+
   score<- sum(positive_matches)-sum(negative_matches)
-  return(score)
+  results<-c(sent.score=score,positives=sum(positive_matches),negatives=sum(negative_matches))
+  return(results)
 }
+
+#sscores(ss3[1,],positives,negatives)
+
+x<-as.data.frame(t(apply(ss3,1,sscores,positive_words=positives,negative_words=negatives)))
+x$id<-(row.names(x))
+rr_u<-merge(rr_u,x,by = "id")
+
+
+saveRDS(rr_u,"rr_u_070515.rds")
