@@ -1,0 +1,24 @@
+#setwd("C:/Users/Daniel/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
+#source("C:/Users/Daniel/Mein Zeug/UNI/Arbeit/EPL FSQCA/Code/Utilities.R")
+setwd("C:/Users/Daniel/SkyDrive/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
+#setwd("L:/HIWIs/2h Daniel/BigData/Dta pure")
+
+library(tm)
+library(RWeka)
+library(plyr)
+library(Hmisc)
+library(xlsx)
+
+rr_u<-readRDS("rr_u_260416.rds")
+
+t<-as.data.frame(table(rr_u$author))
+tt<-merge.data.frame(rr_u,t,by.x = "author",by.y = "Var1")
+tt <- rename(tt, replace = c("Freq" = "Post.Freq"))
+tt$length.text<-nchar(tt$selftext)
+tt$length.title<-nchar(tt$title)
+
+x<-unique(tt[tt$Post.Freq>5,c("author","Post.Freq")])
+x<-x[order(x$Post.Freq,decreasing = TRUE),]
+length(x$author)
+
+hist(tt$length.text)
