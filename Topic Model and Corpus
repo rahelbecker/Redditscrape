@@ -1,0 +1,227 @@
+#setwd("C:/Users/Daniel/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
+#source("C:/Users/Daniel/Mein Zeug/UNI/Arbeit/EPL FSQCA/Code/Utilities.R")
+setwd("C:/Users/Daniel/SkyDrive/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
+#setwd("L:/HIWIs/2h Daniel/BigData/Dta pure")
+
+library(tm)
+library(RWeka)
+library(plyr)
+library(SnowballC)
+library(topicmodels)
+library(ggplot2)
+library(ggrepel)
+
+rr_u<-readRDS("rr_u_260416.rds")
+
+Splithalf<-readRDS("Splithalf.rds")
+subsample1<-readRDS("subsample1.rds")
+row.names(subsample1)<-NULL
+
+ss1prep<-as.data.frame(rr_u[,"selftext"])
+
+ss1<-VCorpus(DataframeSource(ss1prep))
+
+lapply(ss1[1:2],meta)
+
+#assign unique identifier to the texts
+changemeta<-function(ss1,ss12){
+
+  for(i in seq(ss1)){
+  meta(ss1[[i]],"id")<-ss12[i,"id"]
+  }
+  return(ss1)
+}
+
+#myDebug(changemeta)
+ss1<-changemeta(ss1,rr_u)
+
+
+
+# General statistics ------------------------------------------------------
+
+summary(rr_u$author)
+length(unique(rr_u$author))
+
+
+
+
+# Text prep ---------------------------------------------------------------
+#remove special characters
+
+#Stopwords to eliminate = 
+
+rm_specialchar <- function(dta) {
+  for (j in seq(dta))
+  {
+    dta[[j]]$content <- gsub("/", " ", dta[[j]]$content)
+    dta[[j]]$content <- gsub("\\|", " ", dta[[j]]$content)
+    dta[[j]]$content <- gsub("([\\])", " ", dta[[j]]$content)
+    dta[[j]]$content <- gsub("([\\\"])", " ", dta[[j]]$content)
+    dta[[j]]$content <- gsub("\n", " ", dta[[j]]$content)
+    dta[[j]]$content <- gsub("\n\n", " ", dta[[j]]$content)
+    dta[[j]]$content <- gsub("\n\n&amp;nbsp;\n\n", " ", dta[[j]]$content)
+    #dta[[j]]$content <- gsub(",", " ", dta[[j]]$content)
+    dta[[j]]$content <- gsub("'", " ", dta[[j]]$content)
+    dta[[j]]$content <- gsub("nbsp", " ", dta[[j]]$content)
+    dta[[j]]$content <- gsub( "[^[:alnum:]]", " ", dta[[j]]$content)
+  }
+  return(dta)
+}
+
+ss1<-rm_specialchar(ss1)
+
+#removing Punctuation
+ss1<-tm_map(ss1,removePunctuation)
+
+#removing numbers
+ss1<-tm_map(ss1,removeNumbers)
+
+#converting to lowercase
+ss1<-tm_map(ss1,content_transformer(tolower))
+
+ss1<-tm_map(ss1,stripWhitespace)
+
+# #tokenization
+# ss1<-tm_map(ss1,content_transformer(MC_tokenizer))
+
+#removing stopwords
+#ss1<-tm_map(ss1, removeWords,mystops)
+
+#stopword list
+stoplist<-c("yeah","ive","just","one","www","https","amp")
+mystops<-c(stopwords("SMART"),stoplist)
+
+ss1 <- tm_map(ss1, removeWords,mystops)
+
+
+ss2<-ss1
+#####Stemming
+ss1<-tm_map(ss1,stemDocument)
+
+#remove extra whitespace
+ss1<-tm_map(ss1,stripWhitespace)
+
+ss2<-tm_map(ss2,content_transformer(WordTokenizer))
+#lapply(ss1[10:100],as.character)
+#lapply(ss2[10:100],as.character)
+ss1[[1]]
+
+
+# Analysis ----------------------------------------------------------------
+
+dtm<-DocumentTermMatrix(ss1)
+# tdm<-TermDocumentMatrix(ss1)
+
+#extract the term-frequencies(or other measure) from the dtm
+freq<-colSums(as.matrix(dtm))
+ord<-order(freq,decreasing=TRUE)
+freq[head(ord,n=20L)]
+freq[tail(ord,n=20L)]
+
+#create matrix from the term-freq list
+wf=data.frame(term=names(freq),occurrences=freq)
+
+dtmr<-weightTfIdf(dtm,normalize = TRUE)
+
+fr_dtmr<-colSums(as.matrix(dtmr))
+fr_ord<-order(fr_dtmr,decreasing=TRUE)
+fr_dtmr[head(fr_ord,n=20L)]
+fr_dtmr[tail(fr_ord,n=20L)]
+
+wf_dtmr<-data.frame(term=names(fr_dtmr),occurrences=fr_dtmr)
+
+
+# findFreqTerms(tdm, 50)
+#findAssocs(dtmr,"depress",0.2)
+
+ggplot(wf_dtmr, aes(x=occurrences))+xlim(0,5)+
+  geom_vline(xintercept=0.25)+geom_histogram(aes(y=..density..),binwidth = 0.025,
+                                             fill="white",colour="black")+
+  geom_density(alpha=0.2,fill="red")
+
+length(wf_dtmr[wf_dtmr$occurrences<0.1,"occurrences"])
+
+# Frequency bars ----------------------------------------------------------
+
+chartwords<-function(dta,freqcut,fontsize=20){
+  library(ggplot2)
+  p <- ggplot(subset(dta, occurrences>freqcut), aes(term, occurrences))
+  p <- p + geom_bar(stat="identity")
+  p <- p + theme(axis.text.x=element_text(angle=45, hjust=1,size=20,face="bold"))
+  p
+}
+
+chartwords(wf,freqcut=2000)
+
+
+#wordclouds
+library(wordcloud)
+#setting the same seed each time ensures consistent look across clouds
+set.seed(42)
+#limit words by specifying min frequency
+wordcloud(names(freq),freq, min.freq=1000)
+
+wordcloud(names(fr_dtmr),fr_dtmr, min.freq=20)
+
+
+# Topic Modelling ---------------------------------------------------------
+#using topicmodles
+library(topicmodels)
+#Set parameters for Gibbs sampling
+burnin <- 1000
+iter <- 1000
+thin <- 100
+seed <-list(2003,5,63,100001,765)
+nstart <- 5
+best <- TRUE
+
+#number of topics
+k=5
+
+library(slam)
+#calculating average TFidF for each term
+term_tfidf <-
+  + tapply(dtm$v/row_sums(dtm)[dtm$i], dtm$j, mean) *
+  + log2(nDocs(dtm)/col_sums(dtm > 0))
+summary(term_tfidf)
+
+tf<-as.data.frame(term_tfidf)
+summary(tf$term_tfidf)
+ggplot(tf, aes(x=term_tfidf))+xlim(0,2)+
+  geom_vline(xintercept=c(median(tf$term_tfidf),mean(tf$term_tfidf)))+geom_histogram(aes(y=..density..),binwidth = 0.025,
+                                             fill="white",colour="black")+
+  geom_density(alpha=0.2,fill="red")
+
+dtm<-dtm[,term_tfidf>=0.1]
+dtm<-dtm[row_sums(dtm) > 0,]
+
+ldaOut<-LDA(dtm,k, method="Gibbs", control=list(nstart=nstart,
+                                                 seed = seed, best=best,
+                                                 burnin = burnin, iter = iter,
+                                                 thin=thin))
+
+#writing out output
+ldaOut.topics<-as.matrix(topics(ldaOut))
+ldaOut.terms<-as.matrix(terms(ldaOut,10))
+topicProbabilities <- as.data.frame(ldaOut@gamma)
+ldaOut.topiccloud<-as.data.frame(terms(ldaOut,30))
+termProbabilities<- as.matrix(ldaOut@beta)
+termProbabilities<-t(termProbabilities)
+
+tprop<-data.frame(terms=ldaOut@terms)
+tprop<-cbind(tprop,termProbabilities)
+
+topic1<-sort(tprop$`1`,decreasing = TRUE)
+names(topic1)<-ldaOut.topiccloud
+
+x<-tprop[order(tprop$`1`,decreasing=T),]
+xx<-(head(x[2],30))
+ldaOut.topiccloud$W1<-xx$'1'
+
+wordcloud(as.character(ldaOut.topiccloud$`Topic 1`),(-1/(ldaOut.topiccloud$W1)))
+names(freq)
+str(names(freq))
+
+ggplot(data=ldaOut.topiccloud, aes(y=W1,x=seq(1,nrow(ldaOut.topiccloud))))+
+  geom_line()+geom_point()+geom_text_repel(size=8,aes(label=`Topic 1`))
+nrow(topic)
