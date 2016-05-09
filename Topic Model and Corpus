@@ -1,6 +1,6 @@
-#setwd("C:/Users/Daniel/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
+setwd("C:/Users/Daniel/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
 #source("C:/Users/Daniel/Mein Zeug/UNI/Arbeit/EPL FSQCA/Code/Utilities.R")
-setwd("C:/Users/Daniel/SkyDrive/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
+#setwd("C:/Users/Daniel/SkyDrive/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
 #setwd("L:/HIWIs/2h Daniel/BigData/Dta pure")
 
 library(tm)
@@ -10,15 +10,12 @@ library(SnowballC)
 library(topicmodels)
 library(ggplot2)
 library(ggrepel)
+library(Hmisc)
 
-rr_u<-readRDS("rr_u_260416.rds")
+rr_u<-readRDS("rr_u_070515.rds")
+source("C:/Users/Daniel/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/TM utilities.R")
 
-Splithalf<-readRDS("Splithalf.rds")
-subsample1<-readRDS("subsample1.rds")
-row.names(subsample1)<-NULL
-
-ss1prep<-as.data.frame(rr_u[,"selftext"])
-
+ss1prep<-subset(rr_u,select = "selftext")
 ss1<-VCorpus(DataframeSource(ss1prep))
 
 lapply(ss1[1:2],meta)
@@ -48,7 +45,7 @@ length(unique(rr_u$author))
 # Text prep ---------------------------------------------------------------
 #remove special characters
 
-#Stopwords to eliminate = 
+#Stopwords to eliminate =
 
 rm_specialchar <- function(dta) {
   for (j in seq(dta))
@@ -68,6 +65,7 @@ rm_specialchar <- function(dta) {
   return(dta)
 }
 
+Rprof()
 ss1<-rm_specialchar(ss1)
 
 #removing Punctuation
@@ -192,10 +190,10 @@ ggplot(tf, aes(x=term_tfidf))+xlim(0,2)+
                                              fill="white",colour="black")+
   geom_density(alpha=0.2,fill="red")
 
-dtm<-dtm[,term_tfidf>=0.1]
-dtm<-dtm[row_sums(dtm) > 0,]
+dtmlda<-dtm[,term_tfidf>=0.1]
+dtmlda<-dtm[row_sums(dtm) > 0,]
 
-ldaOut<-LDA(dtm,k, method="Gibbs", control=list(nstart=nstart,
+ldaOut<-LDA(dtmlda,k, method="Gibbs", control=list(nstart=nstart,
                                                  seed = seed, best=best,
                                                  burnin = burnin, iter = iter,
                                                  thin=thin))
@@ -204,24 +202,14 @@ ldaOut<-LDA(dtm,k, method="Gibbs", control=list(nstart=nstart,
 ldaOut.topics<-as.matrix(topics(ldaOut))
 ldaOut.terms<-as.matrix(terms(ldaOut,10))
 topicProbabilities <- as.data.frame(ldaOut@gamma)
-ldaOut.topiccloud<-as.data.frame(terms(ldaOut,30))
-termProbabilities<- as.matrix(ldaOut@beta)
-termProbabilities<-t(termProbabilities)
 
-tprop<-data.frame(terms=ldaOut@terms)
-tprop<-cbind(tprop,termProbabilities)
 
-topic1<-sort(tprop$`1`,decreasing = TRUE)
-names(topic1)<-ldaOut.topiccloud
+tprop<-termweigths(ldaOut,10)
 
-x<-tprop[order(tprop$`1`,decreasing=T),]
-xx<-(head(x[2],30))
-ldaOut.topiccloud$W1<-xx$'1'
 
-wordcloud(as.character(ldaOut.topiccloud$`Topic 1`),(-1/(ldaOut.topiccloud$W1)))
-names(freq)
-str(names(freq))
+ggplot(data=tprop, aes(y=W1,x=seq(1,nrow(tprop))))+
+  geom_line(size=1,colour="green")+geom_point()+geom_text_repel(size=8,aes(label=tprop[,"Topic.1"]))
 
-ggplot(data=ldaOut.topiccloud, aes(y=W1,x=seq(1,nrow(ldaOut.topiccloud))))+
-  geom_line()+geom_point()+geom_text_repel(size=8,aes(label=`Topic 1`))
-nrow(topic)
+
+ldaplot.m(tprop)
+
