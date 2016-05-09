@@ -1,0 +1,97 @@
+
+
+# Multiplot ---------------------------------------------------------------
+
+#multiplot
+
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+  if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+termweigths<-function(ldaob,words,topics=k){
+  tpc<-data.frame(as.matrix(terms(ldaob,words)))
+  termprobs<-t(as.matrix(ldaob@beta))
+  tprop<-data.frame(terms=ldaob@terms)
+  tprop<-cbind(tprop,termprobs)
+
+  for(i in 1:topics){
+    x<-tprop$terms %in% tpc[,i]
+    tpc[[sprintf("W%g",i)]]<-as.matrix(sort(tprop[x,as.character(i)],decreasing = T))
+  }
+  return(tpc)
+}
+
+screeplot<-function(dta,model=1,label.size=8,linesize=1,linecolour="green",
+                    titlesize=22){
+  ggplot(data=dta, aes(y=dta[[sprintf("W%g",model)]],x=seq(1,nrow(dta))))+
+    geom_line(size=linesize,colour=linecolour)+geom_point()+
+    geom_text_repel(size=label.size,aes(label=dta[,sprintf("Topic.%g",model)]))+
+    ggtitle(sprintf("Topic %g",model))+
+    theme(plot.title = element_text(size=titlesize))+
+    xlab("")+
+    ylab("weight")
+}
+
+ldaplot.m<-function(dta,models=k){
+  require(grid)
+  require(gridExtra)
+  plots<-list()
+  ifelse(k/2==2.5,col<-3,col<-round(k/2))
+
+  for(i in 1:k){
+    p1<-screeplot(dta,model=i,label.size = 5,titlesize = 15)
+    plots[[i]]<-p1
+
+  }
+  multiplot(plotlist = plots,cols=col)
+}
+
+chartwords<-function(dta,freqcut,fontsize=20){
+  library(ggplot2)
+  p <- ggplot(subset(dta, occurrences>freqcut), aes(term, occurrences))
+  p <- p + geom_bar(stat="identity")
+  p <- p + theme(axis.text.x=element_text(angle=45, hjust=1,size=20,face="bold"))
+  p
+}
