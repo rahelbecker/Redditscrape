@@ -78,7 +78,7 @@ ldaplot.m<-function(dta,models=k){
   require(grid)
   require(gridExtra)
   plots<-list()
-  ifelse(k/2==2.5,col<-3,col<-round(k/2))
+  ifelse(models/2==2.5,col<-3,col<-round(models/2))
 
   for(i in 1:k){
     p1<-screeplot(dta,model=i,label.size = 5,titlesize = 15)
