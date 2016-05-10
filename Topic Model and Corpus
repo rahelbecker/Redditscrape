@@ -1,7 +1,7 @@
-#setwd("C:/Users/Daniel/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
+setwd("C:/Users/Daniel/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
 #source("C:/Users/Daniel/Mein Zeug/UNI/Arbeit/EPL FSQCA/Code/Utilities.R")
 #setwd("C:/Users/Daniel/SkyDrive/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/Dta pure")
-setwd("L:/HIWIs/2h Daniel/BD/Analysis/Dta pure")
+#setwd("L:/HIWIs/2h Daniel/BD/Analysis/Dta pure")
 
 library(tm)
 library(RWeka)
@@ -15,14 +15,15 @@ library(foreach)
 library(doParallel)
 
 rr_u<-readRDS("rr_u_070515.rds")
-#source("C:/Users/Daniel/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/TM utilities.R")
-source("L:/HIWIs/2h Daniel/BD/Analysis/TM utilities.R")
-ss1prep<-subset(rr_u,select = "selftext")
-ss1<-VCorpus(DataframeSource(ss1prep))
+source("C:/Users/Daniel/Mein Zeug/UNI/2. Semester Mannheim FSS 16/Big Data/Reddit/Analysis/TM utilities.R")
+#source("L:/HIWIs/2h Daniel/BD/Analysis/TM u<tilities.R")
+ss1prep<-subset(rr_u,select = c("selftext"))
+rownames(ss1prep)<-(rr_u$id)
 
-lapply(ss1[1:2],meta)
-
+# lapply(ss1[1:2],meta)
+# lapply(ss1[1:2],content)
 #assign unique identifier to the texts
+
 changemeta<-function(ss1,ss12){
 
   for(i in seq(ss1)){
@@ -32,62 +33,47 @@ changemeta<-function(ss1,ss12){
 }
 
 #myDebug(changemeta)
-ss1<-changemeta(ss1,rr_u)
 
 
 
 # General statistics ------------------------------------------------------
 
 summary(rr_u$author)
+#unique authors
 length(unique(rr_u$author))
 
-library(foreach)
-library(parallel)
-library(doParallel)
-
-cl<-makeCluster(3)
-registerDoParallel(cl)
-
-clusterExport(cl,"ss1")
-ls<-foreach(i=1:5909,.combine = rbind) %dopar% {
-#   ss1[[i]]$content <- gsub("/", " ", ss1[[i]]$content)
-#   ss1[[i]]$content <- gsub("\\|", " ", ss1[[i]]$content)
-#   ss1[[i]]$content <- gsub("([\\])", " ", ss1[[i]]$content)
-#   ss1[[i]]$content <- gsub("([\\\"])", " ", ss1[[i]]$content)
-#   ss1[[i]]$content <- gsub("\n", " ", ss1[[i]]$content)
-#   ss1[[i]]$content <- gsub("\n\n", " ", ss1[[i]]$content)
-#   ss1[[i]]$content <- gsub("\n\n&amp;nbsp;\n\n", " ", ss1[[i]]$content)
-#   ss1[[i]]$content <- gsub(",", " ", ss1[[i]]$content)
-#   ss1[[i]]$content <- gsub("'", " ", ss1[[i]]$content)
-#   ss1[[i]]$content <- gsub("nbsp", " ", ss1[[i]]$content)
-  ss1[[i]]$content <- gsub( "[^[:alnum:]]", " ", ss1[[i]]$content)
-}
-stopCluster(cl)
 # Text prep ---------------------------------------------------------------
-#remove special characters
+library(parallel)
 
-#Stopwords to eliminate =
+stime<-system.time({
+cl<-makeCluster(3)
+clusterExport(cl,"ss1prep")
 
-rm_specialchar <- function(dta) {
-  for (j in seq(dta))
-  {
-    dta[[j]]$content <- gsub("/", " ", dta[[j]]$content)
-    dta[[j]]$content <- gsub("\\|", " ", dta[[j]]$content)
-    dta[[j]]$content <- gsub("([\\])", " ", dta[[j]]$content)
-    dta[[j]]$content <- gsub("([\\\"])", " ", dta[[j]]$content)
-    dta[[j]]$content <- gsub("\n", " ", dta[[j]]$content)
-    dta[[j]]$content <- gsub("\n\n", " ", dta[[j]]$content)
-    dta[[j]]$content <- gsub("\n\n&amp;nbsp;\n\n", " ", dta[[j]]$content)
-    #dta[[j]]$content <- gsub(",", " ", dta[[j]]$content)
-    dta[[j]]$content <- gsub("'", " ", dta[[j]]$content)
-    dta[[j]]$content <- gsub("nbsp", " ", dta[[j]]$content)
-    dta[[j]]$content <- gsub( "[^[:alnum:]]", " ", dta[[j]]$content)
-  }
-  return(dta)
-}
+ss1prep$selftext<-parSapply(cl,ss1prep,function(x){
+  #x<-gsub("\\[https?:[^\\]]*\\]", "",x, perl=T)
+  #x<-gsub("\\(https?:[^\\]]*\\)", "",x, perl=T)
+  x<-gsub("https?:[^\\]]*", "",x, perl=T)
+  x <- gsub("/", " ", x)
+  x <- gsub("\\|", " ", x)
+  x <- gsub("([\\])", " ", x)
+  x <- gsub("([\\\"])", " ", x)
+  x <- gsub("\n", " ", x)
+  x <- gsub("\n\n", " ", x)
+  x <- gsub("\n\n&amp;nbsp;\n\n", " ", x)
+  x <- gsub(",", " ", x)
+  x <- gsub("'", " ", x)
+  x <- gsub("nbsp", " ", x)
+  x <- gsub( "[^[:alnum:]]", " ", x)
+  return(x)
+})
+stopCluster(cl)
+})
+stime[3]
 
-Rprof()
-ss1<-rm_specialchar(ss1)
+
+ss1<-VCorpus(DataframeSource(ss1prep))
+ss1<-changemeta(ss1,rr_u)
+
 
 #removing Punctuation
 ss1<-tm_map(ss1,removePunctuation)
@@ -160,16 +146,7 @@ ggplot(wf_dtmr, aes(x=occurrences))+xlim(0,5)+
 
 length(wf_dtmr[wf_dtmr$occurrences<0.1,"occurrences"])
 
-# Frequency bars ----------------------------------------------------------
-
-chartwords<-function(dta,freqcut,fontsize=20){
-  library(ggplot2)
-  p <- ggplot(subset(dta, occurrences>freqcut), aes(term, occurrences))
-  p <- p + geom_bar(stat="identity")
-  p <- p + theme(axis.text.x=element_text(angle=45, hjust=1,size=20,face="bold"))
-  p
-}
-
+# Frequency bars ----------------------------------------------------------
 chartwords(wf,freqcut=2000)
 
 
@@ -180,7 +157,7 @@ set.seed(42)
 #limit words by specifying min frequency
 wordcloud(names(freq),freq, min.freq=1000)
 
-wordcloud(names(fr_dtmr),fr_dtmr, min.freq=20)
+wordcloud(names(fr_dtmr),fr_dtmr, min.freq=50)
 
 
 # Topic Modelling ---------------------------------------------------------
@@ -202,32 +179,28 @@ ggplot(tf, aes(x=term_tfidf))+xlim(0,2)+
 dtmlda<-dtm[,term_tfidf>=0.1]
 dtmlda<-dtm[row_sums(dtm) > 0,]
 
-mycontrol=list(nstart=nstart,
-             seed = seed, best=best,
-             burnin = burnin, iter = iter,
-             thin=thin)
-             
+
 #ldaOut<-LDA(dtmlda,k, method="Gibbs", control=mycontrol,.progress="text")
 
 # #writing out output
-# ldaOut.topics<-as.matrix(topics(ldaOut))
+#ldaOut.topics<-as.matrix(topics(ldaOut))
 # ldaOut.terms<-as.matrix(terms(ldaOut,10))
 # topicProbabilities <- as.data.frame(ldaOut@gamma)
-# 
-# 
+#
+#
 # tprop<-termweigths(ldaOut,10)
-# 
-# 
+#
+#
 # ggplot(data=tprop, aes(y=W1,x=seq(1,nrow(tprop))))+
 #   geom_line(size=1,colour="green")+geom_point()+geom_text_repel(size=8,aes(label=tprop[,"Topic.1"]))
-# 
+#
 # ldaplot.m(tprop)
 
 # Going Parallel ----------------------------------------------------------
 library(topicmodels)
 #Set parameters for Gibbs sampling
 burnin <- 1000
-iter <- 4000
+iter <- 1000
 thin <- 100
 #seed <-list(2003,5,63,100001,765)
 #nstart <- 5
@@ -238,25 +211,42 @@ best <- TRUE
 #number of topics
 k=5
 
+mycontrol=list(nstart=nstart,
+               seed = seed, best=best,
+               burnin = burnin, iter = iter,
+               thin=thin)
 
 n_cores<-detectCores()-1
+
+stimelda<-system.time({
 cl <- makeCluster(n_cores)
 rm(results_list)
 registerDoParallel(cl)
 results_list<-list()
 clusterExport(cl,c("dtmlda","mycontrol"))
-results_list<- foreach::foreach(i=seq(3,5,1), 
+results_list<- foreach::foreach(i=seq(3,5,1),
                         .packages = c('topicmodels')) %dopar% {
                           result <- LDA(dtmlda,
                                 k=i,method="Gibbs" ,control = mycontrol,.progress="text")}
 stopCluster(cl)
+})
+stimelda[3]
 
+#output for the 5 topic's model
+ldaOut.topics<-as.matrix(topics(results_list[[3]]))
+topicProbabilities <- data.frame(documents=results_list[[3]]@documents,results_list[[3]]@gamma)
+topicProbabilities[order(topicProbabilities$X5,decreasing = T),][1,]
+
+# Plotting ----------------------------------------------------------------
 
 ptrop<-foreach(i=1:3) %do%{
   termweigths(results_list[[i]],10,results_list[[i]]@k)
 }
-termweigths(results_list[[3]],10,results_list[[3]]@k)
 
 ldaplot.m(ptrop[[1]],models = ncol(ptrop[[1]])/2)
 ldaplot.m(ptrop[[2]],models = ncol(ptrop[[2]])/2)
 ldaplot.m(ptrop[[3]],models = ncol(ptrop[[3]])/2)
+
+# #access the text
+# content(ss1[["4els3z"]])
+# rr_u[rr_u$id=="4els3z","selftext"]
