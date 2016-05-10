@@ -1,4 +1,6 @@
 
+# Text analysis functions -------------------------------------------------
+
 
 # Multiplot ---------------------------------------------------------------
 
@@ -74,18 +76,30 @@ screeplot<-function(dta,model=1,label.size=8,linesize=1,linecolour="green",
     ylab("weight")
 }
 
+# ldaplot.m<-function(dta,models=k){
+#   require(grid)
+#   require(gridExtra)
+#   plots<-list()
+#   ifelse(models/2==2.5,col<-3,col<-round(k/2))
+#
+#   for(i in 1:models){
+#     p1<-screeplot(dta,model=i,label.size = 5,titlesize = 15)
+#     plots[[i]]<-p1
+#
+#   }
+#   multiplot(plotlist = plots,cols=col)
+# }
+
 ldaplot.m<-function(dta,models=k){
   require(grid)
   require(gridExtra)
-  plots<-list()
-  ifelse(models/2==2.5,col<-3,col<-round(models/2))
+  require(foreach)
+  plotlist<-list()
+  ifelse(models/2==2.5,col<-3,col<-round(k/2))
 
-  for(i in 1:k){
-    p1<-screeplot(dta,model=i,label.size = 5,titlesize = 15)
-    plots[[i]]<-p1
-
-  }
-  multiplot(plotlist = plots,cols=col)
+  plotlist<-foreach(i=1:models)%do%{
+    p<-screeplot(dta,model=i,label.size = 5,titlesize = 15)}
+  multiplot(plotlist = plotlist,cols=col)
 }
 
 chartwords<-function(dta,freqcut,fontsize=20){
