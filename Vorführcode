@@ -1,0 +1,334 @@
+#get started
+
+library (utils)
+library(NLP)
+library(tm)
+library(RWeka)
+library(plyr)
+library(SnowballC)
+library(topicmodels)
+library(ggplot2)
+library(ggrepel)
+library(Hmisc)
+library(foreach)
+library(doParallel)
+
+#get data-----------------------------------------------------------------------------------
+rr_u <- read.csv(file.choose(), header=TRUE)
+
+dim (rr_u)
+
+#TEIL 1 Rahel---------------------------------------------------------------------------------
+rr_u <- read.csv(file.choose(), header=TRUE)
+
+
+#Lineare regression lenght text number of comment
+
+x <- (rr_u$length.text)
+y <- (rr_u$num_comments)
+
+plot(x, y, xlim = c(0, 10000), ylim = c(0, 50), pch = 19)
+abline(model, col = "red")
+
+#lineare Regression
+
+model <- lm (formula= y~x)
+fitted.values
+
+summary (model)
+
+model_Aov <- aov (formula= y~x)
+summary (model)
+
+#Lineare regression lenght text number of comment
+
+x <- (rr_u$sent.score)
+y <- (rr_u$num_comments)
+
+plot(x, y, xlim = c(-50, 50), ylim = c(0, 50), pch = 19)
+abline(model, col = "red")
+
+#lineare Regression
+
+model <- lm (formula= y~x)
+fitted.values
+
+summary (model)
+
+model_Aov <- aov (formula= y~x)
+summary (model)
+
+##########################################################################################
+##########################################################################################
+###########TEIL 2 Was passiert mit dem Text
+
+#data prep
+ss1prep<-subset(rr_u,select = c("selftext"))
+rownames(ss1prep)<-(rr_u$id)
+
+#lapply(ss1[1:2],meta)
+#lapply(ss1[1:2],content)
+#assign unique identifier to the texts
+changemeta<-function(ss1,ss12){
+  
+  for(i in seq(ss1)){
+    meta(ss1[[i]],"id")<-ss12[i,"id"]
+  }
+  return(ss1)
+}
+
+#example that it worked
+summary(rr_u$author)
+#unique authors
+length(unique(rr_u$author))
+
+# Text prep ---------------------------------------------------------------
+library(parallel)
+
+#Sucht euch einen Text aus, den wir jetzt bearbeiten
+rr_u[1645,"selftext"]
+
+stime<-system.time({
+  cl<-makeCluster(3)
+  clusterExport(cl,"ss1prep")
+  
+  stime<-system.time({
+    cl<-makeCluster(3)
+    clusterExport(cl,"ss1prep")
+    
+    
+    ss1prep$selftext<-parSapply(cl,ss1prep,function(x){
+      #x<-gsub("\\[https?:[^\\]]*\\]", "",x, perl=T)
+      #x<-gsub("\\(https?:[^\\]]*\\)", "",x, perl=T)
+      x<-gsub("https?:[^\\]]*", "",x, perl=T)
+      x <- gsub("/", " ", x)
+      x <- gsub("\\|", " ", x)
+      x <- gsub("([\\])", " ", x)
+      x <- gsub("([\\\"])", " ", x)
+      x <- gsub("\n", " ", x)
+      x <- gsub("\n\n", " ", x)
+      x <- gsub("\n\n&amp;nbsp;\n\n", " ", x)
+      x <- gsub(",", " ", x)
+      x <- gsub("'", " ", x)
+      x <- gsub("nbsp", " ", x)
+      x <- gsub( "[^[:alnum:]]", " ", x)
+      return(x)
+    })
+    stopCluster(cl)
+  })
+  stime[3]
+
+#Wie sieht der Text jetzt aus?
+ss1prep[1645,]
+
+#corpus kreieren
+ss1<-VCorpus(DataframeSource(ss1prep))
+ss1<-changemeta(ss1,rr_u)
+
+#removing Punctuation
+ss1<-tm_map(ss1,removePunctuation)
+
+#removing numbers
+ss1<-tm_map(ss1,removeNumbers)
+
+#converting to lowercase
+ss1<-tm_map(ss1,content_transformer(tolower))
+
+ss1<-tm_map(ss1,stripWhitespace)
+
+#Wie sieht unser Teyt jetzt aus?
+data("ss1")
+dataframe<-data.frame(text=unlist(sapply(ss1, `[`, "content")), stringsAsFactors=F)
+
+dataframe[1645,]
+
+# #tokenization
+ss1<-tm_map(ss1,content_transformer(MC_tokenizer))
+
+#wie sieht der Text jetzt aus?
+dataframe2<-data.frame(text=unlist(sapply(ss1, `[`, "content")), stringsAsFactors=F)
+View(dataframe2)
+
+#removing stopwords
+ss1<-tm_map(ss1, removeWords,mystops)
+
+#stopword list
+stoplist<-c("yeah","ive","just","one","www","https","amp")
+mystops<-c(stopwords("SMART"),stoplist)
+
+ss1 <- tm_map(ss1, removeWords,mystops)
+
+#wie sieht der Text jetzt aus?
+dataframe3<-data.frame(text=unlist(sapply(ss1, `[`, "content")), stringsAsFactors=F)
+View(dataframe3)
+# compare Dataframes 2 and 3 now
+
+ss2<-ss1
+#####Stemming
+ss1<-tm_map(ss1,stemDocument)
+
+#wie sieht der Text jetzt aus?
+dataframe4<-data.frame(text=unlist(sapply(ss1, `[`, "content")), stringsAsFactors=F)
+View(dataframe4)
+
+#remove extra whitespace
+ss1<-tm_map(ss1,stripWhitespace)
+
+ss2<-tm_map(ss2,content_transformer(MC_tokenizer))
+
+lapply(ss2[10:12],as.character)
+ss1[[1]]
+
+#############################################################################################################
+##############################################################################################################
+###########Analyse
+
+dtm<-DocumentTermMatrix(ss1)
+tdm<-TermDocumentMatrix(ss1)
+
+#extract the term-frequencies(or other measure) from the dtm
+freq<-colSums(as.matrix(dtm))
+ord<-order(freq,decreasing=TRUE)
+freq[head(ord,n=20L)]
+freq[tail(ord,n=20L)]
+
+#create matrix from the term-freq list
+wf=data.frame(term=names(freq),occurrences=freq)
+
+dtmr<-weightTfIdf(dtm,normalize = TRUE)
+
+fr_dtmr<-colSums(as.matrix(dtmr))
+fr_ord<-order(fr_dtmr,decreasing=TRUE)
+fr_dtmr[head(fr_ord,n=20L)]
+fr_dtmr[tail(fr_ord,n=20L)]
+
+wf_dtmr<-data.frame(term=names(fr_dtmr),occurrences=fr_dtmr)
+
+findFreqTerms(tdm, 50)
+
+#wie plotten das vorkommen der Wörter
+
+ggplot(wf_dtmr, aes(x=occurrences))+xlim(0,5)+
+  geom_vline(xintercept=0.25)+geom_histogram(aes(y=..density..),binwidth = 0.025,
+                                             fill="white",colour="black")+
+  geom_density(alpha=0.2,fill="red")
+
+length(wf_dtmr[wf_dtmr$occurrences<0.1,"occurrences"])
+
+
+#wordclouds--------------------------------------------------------------------
+library(wordcloud)
+#setting the same seed each time ensures consistent look across clouds
+set.seed(42)
+#limit words by specifying min frequency
+wordcloud(names(freq),freq, min.freq=1000)
+
+wordcloud(names(fr_dtmr),fr_dtmr, min.freq=50)
+
+# Topic Modelling ---------------------------------------------------------
+#cleaning data for Gibbs sampling (i.e. removing 0 rows and noisy words)
+library(slam)
+#calculating average TFidF for each term
+term_tfidf <-
+  + tapply(dtm$v/row_sums(dtm)[dtm$i], dtm$j, mean) *
+  + log2(nDocs(dtm)/col_sums(dtm > 0))
+summary(term_tfidf)
+
+tf<-as.data.frame(term_tfidf)
+summary(tf$term_tfidf)
+ggplot(tf, aes(x=term_tfidf))+xlim(0,2)+
+  geom_vline(xintercept=c(median(tf$term_tfidf),mean(tf$term_tfidf)))+geom_histogram(aes(y=..density..),binwidth = 0.025,
+                                                                                     fill="white",colour="black")+
+  geom_density(alpha=0.2,fill="red")
+
+dtmlda<-dtm[,term_tfidf>=0.1]
+dtmlda<-dtm[row_sums(dtm) > 0,]
+
+
+ldaOut<-LDA(dtmlda,k, method="Gibbs", control=mycontrol,.progress="text")
+
+# Going Parallel ----------------------------------------------------------
+library(topicmodels)
+#Set parameters for Gibbs sampling
+burnin <- 1000
+iter <- 1000
+thin <- 100
+#seed <-list(2003,5,63,100001,765)
+#nstart <- 5
+seed <-list(2003)
+nstart <- 1
+best <- TRUE
+
+#number of topics
+k=5
+
+mycontrol=list(nstart=nstart,
+               seed = seed, best=best,
+               burnin = burnin, iter = iter,
+               thin=thin)
+n_cores<-detectCores()-1
+
+stimelda<-system.time({
+  cl <- makeCluster(n_cores)
+  rm(results_list)
+  registerDoParallel(cl)
+  results_list<-list()
+  clusterExport(cl,c("dtmlda","mycontrol"))
+  results_list<- foreach::foreach(i=seq(3,5,1),
+                                  .packages = c('topicmodels')) %dopar% {
+                                    result <- LDA(dtmlda,
+                                                  k=i,method="Gibbs" ,control = mycontrol,.progress="text")}
+  stopCluster(cl)
+})
+stimelda[3]
+
+#output for the 5 topic's model
+ldaOut.topics<-as.matrix(topics(results_list[[3]]))
+topicProbabilities <- data.frame(documents=results_list[[3]]@documents,results_list[[3]]@gamma)
+topicProbabilities[order(topicProbabilities$X5,decreasing = T),][1,]
+
+View(topicProbabilities)
+
+#######################################################
+#Nochmal Prep
+library (ggrepel)
+
+termweights<-function(ldaob,words,topics=k){
+  tpc<-data.frame(as.matrix(terms(ldaob,words)))
+  termprobs<-t(as.matrix(ldaob@beta))
+  tprop<-data.frame(terms=ldaob@terms)
+  tprop<-cbind(tprop,termprobs)
+}
+
+#writing out output
+ldaOut.topics<-as.matrix(topics(ldaOut))
+ldaOut.terms<-as.matrix(terms(ldaOut,10))
+topicProbabilities <- as.data.frame(ldaOut@gamma)
+#
+#
+tprop<-termweights(ldaOut,10)
+
+
+
+
+
+#############################################################
+###########################################################
+#########################ab hier klappts nicht mehr bei mir
+#bzw hier fehlt jetzt, was wir Mittwoch gemacht haben
+
+ggplot(data=tprop, aes(y=W1,x=seq(1,nrow(tprop))))+
+geom_line(size=1,colour="green")+geom_point()+geom_text_repel(size=8,aes(label=tprop[,"Topic.1"]))
+#
+ldaplot.m(tprop)
+
+
+# Plotting----------------------------------------------------------------
+
+ptrop<-foreach(i=1:3) %do%{
+  termweights(results_list[[i]],10,results_list[[i]]@k)
+}
+
+ldaplot.m(ptrop[[1]],models = ncol(ptrop[[1]])/2)
+ldaplot.m(ptrop[[2]],models = ncol(ptrop[[2]])/2)
+ldaplot.m(ptrop[[3]],models = ncol(ptrop[[3]])/2)
